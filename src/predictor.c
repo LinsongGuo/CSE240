@@ -283,7 +283,7 @@ void custom_init() {
 }
 
 uint32_t computed_tag(uint32_t pc) {
-  return (pc & 255) ^ 85 ^ 10; // ^ 128 ^ 2; // (pc & 1023) ^ 975 ^ 198; // (pc & 255) ^ 111 ^ 196; // ^ 111; // ^ 6; // ^ csr1 ^ (csr2 << 1);
+  return (pc & 255) ^ (ghr0 & 255); 
 }
 
 uint8_t custom_predict(uint32_t pc) {
