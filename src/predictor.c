@@ -80,14 +80,10 @@ struct bimodal_t {
   bool m[1 << bimodalBits];
 } bank0;
 
-typedef struct _tag_t {
-  unsigned int value : 16;
-} tag_t;
-
 struct bank_t {
   counter3_t ctrs[1 << bankBits];
   bool u[1 << bankBits];
-  tag_t tags[1 << bankBits]; 
+  uint8_t tags[1 << bankBits]; 
 } bank[4];
 
 uint64_t ghr0, ghr1;
@@ -184,7 +180,6 @@ void gshare_init() {
   ghistoryMask = (1 << ghistoryBits) - 1;
   GHR.value = 0;
   GPT = (counter_t*) malloc((1 << ghistoryBits) * sizeof(counter_t));
-  printf("sizeof: %ld\n", sizeof(counter_t));
   int i;
   for (i = 0; i <= ghistoryMask; ++i) {
     GPT[i].bits[0] = GPT[i].bits[1] = 0;
@@ -204,7 +199,6 @@ void gshare_train(uint32_t pc, uint8_t outcome) {
 
 // Functions For Tournament.
 void tournament_init() {
-  printf("init: %d, %d, %d\n", ghistoryBits, lhistoryBits, pcIndexBits);
   ghistoryMask = (1 << ghistoryBits) - 1;
   lhistoryMask = (1 << lhistoryBits) - 1;
   pcIndexMask = (1 << pcIndexBits) - 1; 
@@ -232,7 +226,7 @@ uint8_t tournament_predict(uint32_t pc) {
   uint32_t local_index = LHT[pc & pcIndexMask].value;
   local_predict = counter_predict(LPT[local_index]);
 
-  uint32_t global_index = GHR.value;// ^ (pc & ghistoryMask); // GHR.value;
+  uint32_t global_index = GHR.value;
   global_predict = counter_predict(GPT[global_index]);
 
   uint8_t choose = counter_predict(chooser[global_index]);
@@ -248,7 +242,7 @@ void tournament_train(uint32_t pc, uint8_t outcome) {
   LPT[local_index] = counter_update(LPT[local_index], outcome);
   update_LTH(pc, outcome);
 
-  uint32_t global_index =  GHR.value;// ^ (pc & ghistoryMask); // GHR.value;
+  uint32_t global_index =  GHR.value;
   GPT[global_index] = counter_update(GPT[global_index], outcome);
   update_GHR(outcome);
 
@@ -262,7 +256,6 @@ void tournament_train(uint32_t pc, uint8_t outcome) {
 void custom_init() {
   ghr0 = ghr1 = 0;
   
-  //printf("init\n");
   bimodalMask = (1 << bimodalBits) - 1;
   bankMask = (1LL << bankBits) - 1;
   bankMask2 = (1LL << (bankBits << 1)) - 1;
@@ -276,7 +269,7 @@ void custom_init() {
   for (i = 0; i < 4; ++i) {
     for (j = 0; j < (1 << bankBits); ++j) {
       bank[i].ctrs[j].value = 0;
-      bank[i].tags[j].value = 0;
+      bank[i].tags[j] = 0;
       bank[i].u[j] = 0;
     }
   }
@@ -287,8 +280,6 @@ uint32_t computed_tag(uint32_t pc) {
 }
 
 uint8_t custom_predict(uint32_t pc) {
-  // printf("%d\n", pc);
-//printf("custom_predict\n");
   uint32_t idx0 = pc & bimodalMask;
   predict[0] = counter3_predict(bank0.ctrs[idx0]);
   flags[0] = bank0.m[idx0];
@@ -300,20 +291,20 @@ uint8_t custom_predict(uint32_t pc) {
   index ^= (ghr0 & bankMask);
   predict[1] = counter3_predict(bank[0].ctrs[index]);
   flags[1] = bank[0].u[index];
-  tags[1] = bank[0].tags[index].value;
+  tags[1] = bank[0].tags[index];
   idx[1] = index;
 
   index ^= ((ghr0 >> bankBits) & bankMask);
   predict[2] = counter3_predict(bank[1].ctrs[index]);
   flags[2] = bank[1].u[index];
-  tags[2] = bank[1].tags[index].value;
+  tags[2] = bank[1].tags[index];
   idx[2] = index;
 
   index ^= ((ghr0 >> (bankBits * 2)) & bankMask);
   index ^= ((ghr0 >> (bankBits * 3)) & bankMask);
   predict[3] = counter3_predict(bank[2].ctrs[index]);
   flags[3] = bank[2].u[index];
-  tags[3] = bank[2].tags[index].value;
+  tags[3] = bank[2].tags[index];
   idx[3] = index;
 
   index ^= (ghr1 & bankMask);
@@ -322,7 +313,7 @@ uint8_t custom_predict(uint32_t pc) {
   index ^= ((ghr1 >> (bankBits * 3)) & bankMask);
   predict[4] = counter3_predict(bank[3].ctrs[index]);
   flags[4] = bank[3].u[index];
-  tags[4] = bank[3].tags[index].value;
+  tags[4] = bank[3].tags[index];
   idx[4] = index;
 
   X = 5; 
@@ -336,12 +327,10 @@ uint8_t custom_predict(uint32_t pc) {
   if (X == 5) {
     X = 0;
   }
-   // printf("%d\n", X);
   return predict[X];
 }
 
 void custom_train(uint32_t pc, uint8_t outcome) {
-//printf("custom_train\n");  printf("X: %d\n",X);
   uint32_t ctag = computed_tag(pc);
 
   ghr1 = (ghr1 << 1 | (ghr0 >> (bankBits * 4 - 1))) & bankMask4;
@@ -354,7 +343,6 @@ void custom_train(uint32_t pc, uint8_t outcome) {
   }
 
   int i;
-
   if (predict[X] != outcome && X <= 3) {
     bool all_set = true;
     for (i = X + 1; i <= 4; ++i) {
@@ -375,23 +363,17 @@ void custom_train(uint32_t pc, uint8_t outcome) {
         }
       }
     }
-//printf("p2\n");
+
     counter3_t stolen_ctr = {tags[0] ? (outcome ? 4 : 3) : (predict[0] ? 4 : 3)};
     for (i = 1; i <= Y[0]; ++i) {
       uint8_t y = Y[i];
-    // printf("y: %d, %d, %d\n", y, idx[y],  bank[y - 1].ctrs[idx[y]].value);
       bank[y - 1].ctrs[idx[y]] = stolen_ctr;
-      //printf("p3\n");
       bank[y - 1].u[idx[y]] = 0;
-    //  printf("p4\n");
-      bank[y - 1].tags[idx[y]].value = ctag;
-      //printf("p5\n");
-      
+      bank[y - 1].tags[idx[y]] = ctag;
     }
   }
-  //printf("X: %d, %d, %d\n", X, predict[X], predict[0]);
+
   if (X > 0 && predict[X] != predict[0]) {
-    //printf("%d, %d, %d\n", X, idx[X], idx[0]);
     if (predict[X] == outcome) {
       bank[X - 1].u[idx[X]] = 1;
       bank0.m[idx[0]] = 1;
@@ -400,7 +382,6 @@ void custom_train(uint32_t pc, uint8_t outcome) {
       bank[X - 1].u[idx[X]] = 0;
       bank0.m[idx[0]] = 0;
     }
-    //printf("ejd\n");
   }
 }
 
