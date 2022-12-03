@@ -232,9 +232,9 @@ uint8_t tournament_predict(uint32_t pc) {
   uint8_t choose = counter_predict(chooser[global_index]);
 
   // default : local
-  return choose == TAKEN ? local_predict : global_predict;
+  // return choose == TAKEN ? local_predict : global_predict;
   // default : global
-  // return choose == TAKEN ? global_predict : local_predict;
+  return choose == TAKEN ? global_predict : local_predict;
 }
 
 void tournament_train(uint32_t pc, uint8_t outcome) {
@@ -247,8 +247,8 @@ void tournament_train(uint32_t pc, uint8_t outcome) {
   update_GHR(outcome);
 
   if (local_predict != global_predict) {
-    chooser[global_index] = counter_update(chooser[global_index], local_predict == outcome); // default : local
-    // chooser[global_index] = counter_update(chooser[global_index], global_predict == outcome); // default : global
+    // chooser[global_index] = counter_update(chooser[global_index], local_predict == outcome); // default : local
+    chooser[global_index] = counter_update(chooser[global_index], global_predict == outcome); // default : global
   }
 }
 
